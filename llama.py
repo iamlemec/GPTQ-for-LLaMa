@@ -328,7 +328,7 @@ def benchmark(model, input_ids, check=False):
         print('Median:', np.median(times))
         if check:
             print('PPL:', torch.exp(tot / (input_ids.numel() - 1)).item())
-            print('max memory(MiB):',max_memory)
+            print('max memory(MiB):', max_memory)
 
 
 if __name__ == '__main__':
@@ -389,6 +389,14 @@ if __name__ == '__main__':
         '--check', action='store_true',
         help='Whether to compute perplexity during benchmarking for verification.'
     )
+    parser.add_argument(
+        '--tokenizer', type=str, default=None,
+        help='Tokenizer to use for loading the dataset.'
+    )
+    parser.add_argument(
+        '--eval', action='store_true',
+        help='Whether to evaluate the model.'
+    )
 
     args = parser.parse_args()
 
@@ -401,9 +409,15 @@ if __name__ == '__main__':
         model = get_llama(args.model)
         model.eval()
 
-    dataloader, testloader = get_loaders(
-        args.dataset, nsamples=args.nsamples, seed=args.seed, model=args.model, seqlen=model.seqlen
-    )
+    if args.tokenizer is not None:
+        tokenizer = args.tokenizer
+    else:
+        tokenizer = args.model
+
+    if not args.load or args.benchmark:
+        dataloader, testloader = get_loaders(
+            args.dataset, nsamples=args.nsamples, seed=args.seed, model=tokenizer, seqlen=model.seqlen
+        )
 
     if not args.load and args.wbits < 16 and not args.nearest:
         tick = time.time()
@@ -416,18 +430,19 @@ if __name__ == '__main__':
             llama_multigpu(model, gpus)
         else:
             model = model.to(DEV)
-        if args.benchmark:
-            input_ids = next(iter(dataloader))[0][:, :args.benchmark]
-            benchmark(model, input_ids, check=args.check)
+        input_ids = next(iter(dataloader))[0][:, :args.benchmark]
+        benchmark(model, input_ids, check=args.check)
+
     if args.load:
         exit()
 
-    for dataset in ['wikitext2', 'ptb', 'c4']:
-        dataloader, testloader = get_loaders(
-            dataset, seed=args.seed, model=args.model, seqlen=model.seqlen
-        )
-        print(dataset)
-        llama_eval(model, testloader, DEV)
+    if args.eval:
+        for dataset in ['wikitext2', 'ptb', 'c4']:
+            dataloader, testloader = get_loaders(
+                dataset, seed=args.seed, model=tokenizer, seqlen=model.seqlen
+            )
+            print(dataset)
+            llama_eval(model, testloader, DEV)
 
     if args.save:
         llama_pack(model, quantizers, args.wbits)

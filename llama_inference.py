@@ -73,45 +73,49 @@ if __name__ == '__main__':
         '--load', type=str, default='',
         help='Load quantized model.'
     )
-
     parser.add_argument(
         '--text', type=str,
         help='input text'
     )
-    
     parser.add_argument(
         '--min_length', type=int, default=10,
         help='The minimum length of the sequence to be generated.'
     )
-    
     parser.add_argument(
         '--max_length', type=int, default=50,
         help='The maximum length of the sequence to be generated.'
     )
-    
     parser.add_argument(
         '--top_p', type=float , default=0.95,
         help='If set to float < 1, only the smallest set of most probable tokens with probabilities that add up to top_p or higher are kept for generation.'
     )
-    
     parser.add_argument(
         '--temperature', type=float, default=0.8,
         help='The value used to module the next token probabilities.'
     )
-    
+    parser.add_argument(
+        '--tokenizer', type=str, default=None,
+        help='Tokenizer to use for loading the dataset.'
+    )
+
     args = parser.parse_args()
 
     if type(args.load) is not str:
         args.load = args.load.as_posix()
-    
+
     if args.load:
         model = load_quant(args.model, args.load, args.wbits)
     else:
         model = get_llama(args.model)
         model.eval()
-        
+
+    if args.tokenizer is not None:
+        tokenizer = args.tokenizer
+    else:
+        tokenizer = args.model
+
     model.to(DEV)
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer)
     input_ids = tokenizer.encode(args.text, return_tensors="pt").to(DEV)
 
     with torch.no_grad():
